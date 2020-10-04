@@ -1,0 +1,11 @@
+{
+  "name": "ProjetNodeVoiture",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Chloé Talour <talour.chloe@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.17.1",
+    "mysql": "^2.18.1"
+  }
+}
