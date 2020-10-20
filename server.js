@@ -3,6 +3,7 @@ const app = express();
 const mysql = require('promise-mysql');
 const bcrypt = require('bcrypt');
 
+
 const connectionPromise = mysql.createConnection({
 	host: 'localhost',
 	user: 'root',
@@ -13,6 +14,7 @@ const connectionPromise = mysql.createConnection({
 app.use(express.json());
 
 app.get('/users', async (req, res) => {
+	const connection = await connectionPromise;
 	connection.query('SELECT * FROM `users` WHERE 1', (error, results, fields) => {
 		if (error) {
 			console.log(error);
@@ -22,63 +24,44 @@ app.get('/users', async (req, res) => {
 });
 
 app.get('/vehicules', async (req, res) => {
-
-	let arrayWithAll = [];
-    
 	const connection = await connectionPromise;
 	console.log('connection', connection);
     
-	connection.query('SELECT * from `vehicule`', (error, results, fields) => {
-		if (error) {
-			return res.send(error);
-		}
+	const vehiculeSale = await connection.query('SELECT * from `vehicule`').catch(error => console.log(error));
+    
+	const result = vehiculeSale.map(async ( vehicule ) => {
+		const comments = await connection.query(`SELECT * FROM Comments WHERE licensePlate = '${vehicule.licensePlate}'`);
 
-		// res.send(results[0]);
-		const osef = results.map((elt) => {
-			const lol = connection.query('SELECT * FROM Comments WHERE licensePlate = \'22-123-23\'', (error, results, fields) => {
-				if(error) {
-					return res.send(error); 
-				}
-
-				const allStuff = {
-					id: elt.id,
-					'licensePlate': elt.licensePlate,
-					'brand': elt.brand,
-					'model': elt.model,
-					'description': elt.description,
-					'comments': results,
-				};
-                
-				//arrayWithAll.push({lo: 'lo'});
-				return allStuff;
-			});
-			return lol;
-		});
-
-		console.log('osef', osef);
-		return res.send(osef);
+		return {
+			...vehicule,
+			comments
+		};
 	});
+
+	console.log('vehiculeSale', vehiculeSale);
+	console.log('result', result);
+	return res.send(await Promise.all(result));
 });
 
 app.post('/create-user', async (req, res) => {
+	const connection = await connectionPromise;
 	const firstname = req.body.firstname;
 	const lastname = req.body.lastname;
 	const email = req.body.email;
 	const password = bcrypt.hashSync(req.body.password, 10);
 
-	connection.query(`INSERT INTO users (firstname, lastname, email, password) VALUES ('${firstname}', '${lastname}', '${email}', '${password}')`, (error, results, fields) => {
-		if(error) {
-			console.log(error);
-		}
-		const result = {
-			'id': results.insertId,
-			'firstname': firstname,
-			'lastname': lastname,
-			'email': email,
-			'password': password
-		};
-		res.send(result);
-	});
+	const requestResult = await connection.query(`INSERT INTO users (firstname, lastname, email, password) VALUES ('${firstname}', '${lastname}', '${email}', '${password}')`);
+    
+	const result = {
+		'id': requestResult.insertId,
+		'firstname': firstname,
+		'lastname': lastname,
+		'email': email,
+		'password': password
+	};
+    
+	console.log('create user result', result);
+	res.send(result);
 });
 
 app.post('/create-vehicule', async (req, res) => {
