@@ -3,7 +3,6 @@ const app = express();
 const mysql = require('promise-mysql');
 const bcrypt = require('bcrypt');
 
-
 const connectionPromise = mysql.createConnection({
 	host: 'localhost',
 	user: 'root',
@@ -15,17 +14,12 @@ app.use(express.json());
 
 app.get('/users', async (req, res) => {
 	const connection = await connectionPromise;
-	connection.query('SELECT * FROM `users` WHERE 1', (error, results, fields) => {
-		if (error) {
-			console.log(error);
-		}
-		res.send(results);
-	});
+	const results = await connection.query('SELECT * FROM users');
+	res.send(results);
 });
 
 app.get('/vehicules', async (req, res) => {
 	const connection = await connectionPromise;
-	console.log('connection', connection);
     
 	const vehiculeSale = await connection.query('SELECT * from `vehicule`').catch(error => console.log(error));
     
@@ -65,6 +59,7 @@ app.post('/create-user', async (req, res) => {
 });
 
 app.post('/create-vehicule', async (req, res) => {
+	const connection = await connectionPromise;
 	const licensePlate = req.body.licensePlate;
 	const brand = req.body.brand;
 	const model = req.body.model;
@@ -77,23 +72,22 @@ app.post('/create-vehicule', async (req, res) => {
 	if(licensePlate.length !== 9) {
 		return res.status(500).send({error: 'not valid license plate'});
 	}
+	
+	const results = await connection.query(`INSERT INTO vehicule (licensePlate, brand, model, description) VALUES ('${licensePlate}', '${brand}', '${model}', '${description}')`);
 
-	connection.query(`INSERT INTO vehicule (licensePlate, brand, model, description) VALUES ('${licensePlate}', '${brand}', '${model}', '${description}')`, (error, results, fields) => {
-		if(error) {
-			return res.send(error);
-		}
-		const result = {
-			'id': results.insertId,
-			'licensePlate': licensePlate,
-			'brand': brand,
-			'model': model,
-			'description': description,
-		};
-		res.send(result);
-	});
+	const result = {
+		'id': results.insertId,
+		'licensePlate': licensePlate,
+		'brand': brand,
+		'model': model,
+		'description': description,
+	};
+	res.send(result);
+
 });
 
 app.post('/add-comment', async (req, res) => {
+	const connection = await connectionPromise;
 	const licensePlate = req.body.licensePlate;
 	const tag = req.body.tag;
 	const message = req.body.message;
@@ -116,29 +110,22 @@ app.post('/add-comment', async (req, res) => {
 	}
 
 
-	connection.query(`INSERT INTO Comments (licensePlate, tag, message, userId) VALUES ('${licensePlate}', '${tag}', '${message}', '${userId}')`, (error, results, fields) => {
-		if(error) {
-			return res.send(error);
-		}
+	const addComment = await connection.query(`INSERT INTO Comments (licensePlate, tag, message, userId) VALUES ('${licensePlate}', '${tag}', '${message}', '${userId}')`);
 
-		connection.query(`SELECT * from users WHERE id = ${userId}`, (error, results, fields) => {
-			if(error) {
-				return res.send(error);
-			}
-			const result = {
-				'id': results.insertId,
-				'licensePlate': licensePlate,
-				'tag': tag,
-				'message': message,
-				'user': results,
-			};
-			res.send(result);
-		});
+	const results = await connection.query(`SELECT * from users WHERE id = ${userId}`);
+	const result = {
+		'id': results.insertId,
+		'licensePlate': licensePlate,
+		'tag': tag,
+		'message': message,
+		'user': results,
+	};
+	res.send(result);
 
-	});
 });
 
 app.post('/login', async (req, res) => {
+	const connection = await connectionPromise;
 	const email = req.body.email;
 	const password = req.body.password;
 
@@ -150,22 +137,18 @@ app.post('/login', async (req, res) => {
 		return res.status(500).send({error: 'not valid password'});
 	}
 
-	connection.query(`SELECT * FROM users WHERE email = '${email}'`, (error, results, fields) => {
-		if(error) {
-			return res.send(error);
-		}
+	const results = await connection.query(`SELECT * FROM users WHERE email = '${email}'`);
 
-		if(results.length === 0) {
-			return res.status(500).send({error: 'not valid Email'});
-		}
+	if(results.length === 0) {
+		return res.status(500).send({error: 'not valid Email'});
+	}
 
-		if(bcrypt.compareSync(password, results[0].password)) {
-			return res.send(results);
-		} else {
-			return res.status(500).send({error: 'not good password'});
-		}
+	if(bcrypt.compareSync(password, results[0].password)) {
+		return res.send(results);
+	} else {
+		return res.status(500).send({error: 'not good password'});
+	}
         
-	});
 });
 
 app.listen(8081, () => {
