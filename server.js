@@ -2,6 +2,9 @@ const express = require('express');
 const app = express();
 const mysql = require('promise-mysql');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const jwtKey = 'my_secret_key';
 
 const connectionPromise = mysql.createConnection({
 	host: 'localhost',
@@ -20,21 +23,33 @@ app.get('/users', async (req, res) => {
 
 app.get('/vehicules', async (req, res) => {
 	const connection = await connectionPromise;
-    
-	const vehiculeSale = await connection.query('SELECT * from `vehicule`').catch(error => console.log(error));
-    
-	const result = vehiculeSale.map(async ( vehicule ) => {
-		const comments = await connection.query(`SELECT * FROM Comments WHERE licensePlate = '${vehicule.licensePlate}'`);
+	const authHeader = req.headers.authorization;
 
-		return {
-			...vehicule,
-			comments
-		};
-	});
+	if (authHeader) {
+		const token = authHeader.split(' ')[1];
 
-	console.log('vehiculeSale', vehiculeSale);
-	console.log('result', result);
-	return res.send(await Promise.all(result));
+		jwt.verify(token, jwtKey, async (err, user) => {
+			if (err) {
+				return res.status(403).send({ error: 'acces non autorisé'});
+			}
+
+			const vehiculeSale = await connection.query('SELECT * from `vehicule`').catch(error => console.log(error));
+			const result = vehiculeSale.map(async ( vehicule ) => {
+				const comments = await connection.query(`SELECT * FROM Comments WHERE licensePlate = '${vehicule.licensePlate}'`);
+
+				return {
+					...vehicule,
+					comments
+				};
+			});
+
+			return res.send(await Promise.all(result));
+		});
+	} else {
+		return res.status(401).send({ error: 'acces non autorisé'});
+	}
+    
+	
 });
 
 app.post('/create-user', async (req, res) => {
@@ -143,8 +158,22 @@ app.post('/login', async (req, res) => {
 		return res.status(500).send({error: 'not valid Email'});
 	}
 
+	const payload = 
+		{
+			id: results[0].id,
+			firstname: results[0].firstname,
+			lastname: results[0].lastname,
+			email: results[0].email
+		}
+	;
+
+	const token = jwt.sign(payload, jwtKey, {
+		algorithm: 'HS256',
+		expiresIn: 60*60*12,
+	});
+
 	if(bcrypt.compareSync(password, results[0].password)) {
-		return res.send(results);
+		return res.send(token);
 	} else {
 		return res.status(500).send({error: 'not good password'});
 	}
