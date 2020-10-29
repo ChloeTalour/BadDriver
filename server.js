@@ -3,6 +3,8 @@ const app = express();
 const mysql = require('promise-mysql');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { promisify } = require('util');
+const asyncVerify = promisify(jwt.verify);
 
 const jwtKey = 'my_secret_key';
 
@@ -28,23 +30,22 @@ app.get('/vehicules', async (req, res) => {
 	if (authHeader) {
 		const token = authHeader.split(' ')[1];
 
-		jwt.verify(token, jwtKey, async (err, user) => {
-			if (err) {
+		await asyncVerify(token, jwtKey)
+			.catch(() => {
 				return res.status(403).send({ error: 'acces non autorisé'});
-			}
-
-			const vehiculeSale = await connection.query('SELECT * from `vehicule`').catch(error => console.log(error));
-			const result = vehiculeSale.map(async ( vehicule ) => {
-				const comments = await connection.query(`SELECT * FROM Comments WHERE licensePlate = '${vehicule.licensePlate}'`);
-
-				return {
-					...vehicule,
-					comments
-				};
 			});
 
-			return res.send(await Promise.all(result));
+		const vehiculeSale = await connection.query('SELECT * from `vehicule`').catch(error => console.log(error));
+		const result = vehiculeSale.map(async ( vehicule ) => {
+			const comments = await connection.query(`SELECT * FROM Comments WHERE licensePlate = '${vehicule.licensePlate}'`);
+
+			return {
+				...vehicule,
+				comments
+			};
 		});
+
+		return res.send(await Promise.all(result));
 	} else {
 		return res.status(401).send({ error: 'acces non autorisé'});
 	}
